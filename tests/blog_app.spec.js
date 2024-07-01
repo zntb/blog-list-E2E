@@ -45,20 +45,27 @@ describe('Blog app', () => {
     test('a new blog can be created', async ({ page }) => {
       await createBlog(page, 'Test Blog', 'testuser', 'http://test.com');
       await expect(page.getByTestId('notification')).toHaveText('A new blog "Test Blog" by testuser added');
+
+      const successDiv = await page.locator('text=A new blog "Test Blog" by testuser added').first();
+      await expect(successDiv).toContainText('A new blog "Test Blog" by testuser added');
+      await expect(successDiv).toHaveCSS('color', 'rgb(0, 128, 0)');
+      await expect(successDiv).toHaveCSS('border', '2px solid rgb(0, 128, 0)');
     });
 
     describe('and a blog exists', () => {
+      let blogPostLocator;
+
       beforeEach(async ({ page }) => {
         await createBlog(page, 'Test Blog', 'testuser', 'http://test.com');
+        blogPostLocator = page.locator('text=Test Blog testuser');
       });
 
       test('a blog can be liked', async ({ page }) => {
         await page.reload();
                 
-        const blogPost = page.locator('text=Test Blog testuser');
-        await blogPost.waitFor({ state: 'visible' });
+        await blogPostLocator.waitFor({ state: 'visible' });
        
-        const toggleButton = blogPost.locator('button', { hasText: 'view' });
+        const toggleButton = blogPostLocator.locator('button', { hasText: 'view' });
         await toggleButton.click();
 
         const likeButton = page.getByRole('button', { name: 'like' });
@@ -70,6 +77,32 @@ describe('Blog app', () => {
         const updatedLikesText = await likesLocator.innerText();
         const updatedLikes = parseInt(updatedLikesText.match(/\d+/)[0]);
         expect(updatedLikes).toBe(1); 
+      });
+
+      test('a blog can be deleted', async ({ page }) => {
+        await page.reload();
+                
+        const blogPost = page.locator('text=Test Blog testuser');
+        await blogPost.waitFor({ state: 'visible' });
+       
+        const toggleButton = blogPost.locator('button', { hasText: 'view' });
+        await toggleButton.click();
+
+       
+        page.on('dialog', async dialog => {
+          console.log('Dialog message:', dialog.message());
+          await dialog.accept();
+        });
+
+        const removeButton = page.getByRole('button', { name: 'remove' });
+        await removeButton.click();
+
+        await expect(blogPost).not.toBeVisible();
+
+        const successDiv = await page.locator('text=Blog removed successfully').first();
+        await expect(successDiv).toContainText('Blog removed successfully');
+        await expect(successDiv).toHaveCSS('color', 'rgb(0, 128, 0)');
+        await expect(successDiv).toHaveCSS('border', '2px solid rgb(0, 128, 0)');
       });
     });  
   });
