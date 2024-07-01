@@ -12,6 +12,14 @@ describe('Blog app', () => {
       }
     });
 
+    await request.post('/api/users', {
+      data: {
+        name: 'Other User',
+        username: 'otheruser',
+        password: 'pass123'
+      }
+    });
+
     await page.goto('');
   });
 
@@ -103,6 +111,32 @@ describe('Blog app', () => {
         await expect(successDiv).toContainText('Blog removed successfully');
         await expect(successDiv).toHaveCSS('color', 'rgb(0, 128, 0)');
         await expect(successDiv).toHaveCSS('border', '2px solid rgb(0, 128, 0)');
+      });
+
+      test('only the user who added the blog sees the delete button', async ({ page }) => {
+        await page.reload();
+
+        let blogPost = page.locator('text=Test Blog testuser');
+        await blogPost.waitFor({ state: 'visible' });
+       
+        let toggleButton = blogPost.locator('button', { hasText: 'view' });
+        await toggleButton.click();
+
+        let removeButton = blogPost.locator('button', { hasText: 'remove' });
+        await expect(removeButton).not.toBeVisible();
+
+        await page.getByRole('button', { name: 'logout' }).click();
+
+        await loginWith(page, 'otheruser', 'pass123');
+
+        blogPost = page.locator('text=Test Blog testuser');
+        await blogPost.waitFor({ state: 'visible' });
+
+        toggleButton = blogPost.locator('button', { hasText: 'view' });
+        await toggleButton.click();
+
+        removeButton = blogPost.locator('button', { hasText: 'remove' });
+        await expect(removeButton).not.toBeVisible();
       });
     });  
   });
