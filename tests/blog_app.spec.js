@@ -8,16 +8,16 @@ describe('Blog app', () => {
       data: {
         name: 'Test User',
         username: 'testuser',
-        password: 'pass123'
-      }
+        password: 'pass123',
+      },
     });
 
     await request.post('/api/users', {
       data: {
         name: 'Other User',
         username: 'otheruser',
-        password: 'pass123'
-      }
+        password: 'pass123',
+      },
     });
 
     await page.goto('');
@@ -61,19 +61,21 @@ describe('Blog app', () => {
     });
 
     describe('and a blog exists', () => {
-      let blogPostLocator;
+      let blogs;
 
       beforeEach(async ({ page }) => {
-        await createBlog(page, 'Test Blog', 'testuser', 'http://test.com');
-        blogPostLocator = page.locator('text=Test Blog testuser');
+        await createBlog(page, 'First Blog', 'testuser', 'http://first.com');
+        await createBlog(page, 'Second Blog', 'testuser', 'http://second.com');
+        await createBlog(page, 'Third Blog', 'testuser', 'http://third.com');
+        blogs = await page.locator('.blog').all();
       });
 
       test('a blog can be liked', async ({ page }) => {
         await page.reload();
-                
-        await blogPostLocator.waitFor({ state: 'visible' });
-       
-        const toggleButton = blogPostLocator.locator('button', { hasText: 'view' });
+
+        await blogs[0].waitFor({ state: 'visible' });
+
+        const toggleButton = blogs[0].locator('button', { hasText: 'view' });
         await toggleButton.click();
 
         const likeButton = page.getByRole('button', { name: 'like' });
@@ -84,20 +86,19 @@ describe('Blog app', () => {
         const likesLocator = page.getByTestId('likes');
         const updatedLikesText = await likesLocator.innerText();
         const updatedLikes = parseInt(updatedLikesText.match(/\d+/)[0]);
-        expect(updatedLikes).toBe(1); 
+        expect(updatedLikes).toBe(1);
       });
 
       test('a blog can be deleted', async ({ page }) => {
         await page.reload();
-                
-        const blogPost = page.locator('text=Test Blog testuser');
+
+        const blogPost = page.locator('text=First Blog testuser');
         await blogPost.waitFor({ state: 'visible' });
-       
+
         const toggleButton = blogPost.locator('button', { hasText: 'view' });
         await toggleButton.click();
 
-       
-        page.on('dialog', async dialog => {
+        page.on('dialog', async (dialog) => {
           console.log('Dialog message:', dialog.message());
           await dialog.accept();
         });
@@ -116,9 +117,9 @@ describe('Blog app', () => {
       test('only the user who added the blog sees the delete button', async ({ page }) => {
         await page.reload();
 
-        let blogPost = page.locator('text=Test Blog testuser');
+        let blogPost = page.locator('text=First Blog testuser');
         await blogPost.waitFor({ state: 'visible' });
-       
+
         let toggleButton = blogPost.locator('button', { hasText: 'view' });
         await toggleButton.click();
 
@@ -129,7 +130,7 @@ describe('Blog app', () => {
 
         await loginWith(page, 'otheruser', 'pass123');
 
-        blogPost = page.locator('text=Test Blog testuser');
+        blogPost = page.locator('text=First Blog testuser');
         await blogPost.waitFor({ state: 'visible' });
 
         toggleButton = blogPost.locator('button', { hasText: 'view' });
@@ -138,7 +139,47 @@ describe('Blog app', () => {
         removeButton = blogPost.locator('button', { hasText: 'remove' });
         await expect(removeButton).not.toBeVisible();
       });
-    });  
+
+      test('blogs are ordered by likes in descending order', async ({ page }) => {
+        await page.reload();
+
+        await page.waitForSelector('.blog');
+
+        const likeBlogNTimes = async (blogTitle, n) => {
+          const blog = page.locator(`.blog:has-text("${blogTitle}")`);
+          await blog.locator('button', { hasText: 'view' }).click();
+          const likeButton = blog.locator('button', { hasText: 'like' }).first();
+
+          for (let i = 0; i < n; i++) {
+            await likeButton.click();
+            await page.waitForTimeout(1000);
+          }
+
+          await blog.locator('button', { hasText: 'hide' }).click();
+        };
+
+        await likeBlogNTimes('First Blog', 1);
+        await likeBlogNTimes('Second Blog', 2);
+        await likeBlogNTimes('Third Blog', 3);
+
+        const blogs = await page.locator('.blog').all();
+        for (let blog of blogs) {
+          await blog.locator('button', { hasText: 'view' }).click();
+        }
+
+        await page.waitForSelector('.blog');
+
+        const blogLikes = await page.$$eval('.blog', (blogs) => {
+          return blogs.map((blog) => {
+            const likesElement = blog.querySelector('.blog-likes');
+            return likesElement ? parseInt(likesElement.textContent.match(/\d+/)[0]) : 0;
+          });
+        });
+
+        expect(blogLikes[0]).toBe(3);
+        expect(blogLikes[1]).toBe(2);
+        expect(blogLikes[2]).toBe(1);
+      });
+    });
   });
 });
-
